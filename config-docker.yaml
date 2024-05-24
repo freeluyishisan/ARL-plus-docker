@@ -17,8 +17,8 @@ GEOIP:
 #Fofa API 配置项
 FOFA:
   URL: "https://fofa.info"
-  EMAIL: ""
-  KEY: ""
+  EMAIL: "jay183579686@gmail.com"
+  KEY: "7bccd97ee02023e8568b1c9702a9eeaf"
 
 
 # 利用三方API进行域名收集
@@ -29,15 +29,15 @@ QUERY_PLUGIN:
     auth_email: n1un1u2019@qq.com
     auth_key: 03da3c29cce5152a536bae332f7b03a288154b37a13b93921225d3ade49c9b4c
   hunter_qax:  # 网站 https://hunter.qianxin.com/
-    api_key: 
+    api_key: 5759b8211cd3497211b1a77bbd98032183349e72e28ce183c131c2ad7f5371b1
     page_size: 100
     max_page: 5
   securitytrails: # 网站 https://securitytrails.com/
     api_key:
   virustotal: # 网站 https://www.virustotal.com/gui/
-    api_key:
+    api_key: 152a4f852e3357c8717b06cc7d4e2efd77ba0126e55640948c3aecd4c3910411
   quake_360: # 网站 https://quake.360.cn/
-    quake_token: 
+    quake_token: 53636082-981d-4348-bd6f-f3a5b5eb7b8f
     max_size: 500
   certspotter: # 网站 https://www.certspotter.com/
     after_id: 0
