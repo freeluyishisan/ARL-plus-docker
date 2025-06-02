@@ -3,18 +3,17 @@ import os.path
 import subprocess
 import logging
 
-from app.config import Config
 from app import utils
 
 # 配置日志到 /tmp/
 rand_str = utils.random_choices()
 log_file = f"/tmp/nuclei_scan_{rand_str}.log"
 logging.basicConfig(
-    level=logging.DEBUG,  # 使用 DEBUG 级别以捕获更多信息
+    level=logging.DEBUG,
     format='%(asctime)s %(levelname)s %(message)s',
     handlers=[
         logging.FileHandler(log_file),
-        logging.StreamHandler()  # 保留终端输出
+        logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
@@ -22,19 +21,15 @@ logger = logging.getLogger(__name__)
 class NucleiScan(object):
     def __init__(self, targets: list):
         self.targets = targets
-        logger.debug(f"初始化 NucleiScan，目标数量: {len(targets)}")
+        logger.debug(f"初始化 NucleiScan，目标数量: {len(targets)}, 目标: {targets}")
 
         tmp_path = "/tmp"
         rand_str = utils.random_choices()
 
-        self.nuclei_target_path = os.path.join(tmp_path,
-                                               f"nuclei_target_{rand_str}.txt")
-        self.nuclei_result_path = os.path.join(tmp_path,
-                                               f"nuclei_result_{rand_str}.json")
-        self.vscan_result_path = os.path.join(tmp_path,
-                                              f"vscan_result_{rand_str}.json")
-        self.rad_output_path = os.path.join(tmp_path,
-                                            f"rad_output_{rand_str}.txt")
+        self.nuclei_target_path = os.path.join(tmp_path, f"nuclei_target_{rand_str}.txt")
+        self.nuclei_result_path = os.path.join(tmp_path, f"nuclei_result_{rand_str}.json")
+        self.vscan_result_path = os.path.join(tmp_path, f"vscan_result_{rand_str}.json")
+        self.rad_output_path = os.path.join(tmp_path, f"rad_output_{rand_str}.txt")
 
         self.nuclei_bin_path = "nuclei"
         self.vscan_bin_path = "vscan"
@@ -44,12 +39,14 @@ class NucleiScan(object):
         logger.debug(f"临时文件路径: target={self.nuclei_target_path}, rad_output={self.rad_output_path}")
 
     def _delete_file(self):
-        # 不删除任何文件以便测试
         logger.debug("跳过文件删除，保留所有临时文件")
 
     def _gen_target_file(self):
         try:
             logger.debug(f"开始生成目标文件: {self.nuclei_target_path}")
+            if not self.targets:
+                logger.error("目标列表为空，无法生成目标文件")
+                raise ValueError("目标列表为空")
             with open(self.nuclei_target_path, "w") as f:
                 for domain in self.targets:
                     domain = domain.strip()
@@ -95,11 +92,10 @@ class NucleiScan(object):
     def exec_nuclei(self):
         self._gen_target_file()
 
-        # 执行 rad 命令
+        # 执行 rad 命令（移除 -http-proxy）
         rad_command = [
             self.rad_bin_path,
             f"-t {self.nuclei_target_path}",
-            #"-http-proxy", "127.0.0.1:7777",
             "-text-output", self.rad_output_path
         ]
         logger.info(f"运行 rad 命令: {' '.join(rad_command)}")
@@ -109,7 +105,7 @@ class NucleiScan(object):
                 rad_command,
                 capture_output=True,
                 text=True,
-                timeout=3600  # 1 小时超时
+                timeout=3600
             )
             logger.info(f"rad stdout: {result.stdout}")
             if result.stderr:
@@ -142,7 +138,7 @@ class NucleiScan(object):
         logger.debug("开始运行 NucleiScan")
         self.exec_nuclei()
         results = self.dump_result()
-        self._delete_file()  # 实际不删除文件
+        self._delete_file()
         logger.debug(f"扫描完成，结果条目数: {len(results)}")
         return results
 
