@@ -9,12 +9,12 @@ http:
   proxy_rule: []                        # 漏洞扫描使用多个代理的配置规则, 具体请参照文档
   dial_timeout: 5                       # 建立 tcp 连接的超时时间
   read_timeout: 10                      # 读取 http 响应的超时时间，不可太小，否则会影响到 sql 时间盲注的判断
-  max_conns_per_host: 30                # 同一 host 最大允许的连接数，可以根据目标主机性能适当增大
+  max_conns_per_host: 60                # 同一 host 最大允许的连接数，可以根据目标主机性能适当增大
   enable_http2: false                   # 是否启用 http2, 开启可以提升部分网站的速度，但目前不稳定有崩溃的风险
   fail_retries: 0                       # 请求失败的重试次数，0 则不重试
   max_redirect: 5                       # 单个请求最大允许的跳转数
   max_resp_body_size: 2097152           # 最大允许的响应大小, 默认 2M
-  max_qps: 300                          # 每秒最大请求数
+  max_qps: 500                          # 每秒最大请求数
   allow_methods:                        # 允许的请求方法
   - HEAD
   - GET
@@ -36,8 +36,8 @@ http:
 plugins:
   baseline:
     enabled: true
-    detect_cors_header_config: false     # 检查 cors 相关配置
-    detect_server_error_page: false      # 检查服务器错误信息
+    detect_cors_header_config: true     # 检查 cors 相关配置
+    detect_server_error_page: true      # 检查服务器错误信息
     detect_phpinfo: true                # 检查响应是否包含phpinfo
     detect_system_path_leak: true      # 检查响应是否包含系统路径泄露
     detect_outdated_ssl_version: false  # 检查 ssl 版本问题
@@ -102,7 +102,7 @@ plugins:
   upload:
     enabled: true
   xss:
-    enabled: false
+    enabled: true
     detect_xss_in_cookie: true          # 是否探测入口点在 cookie 中的 xss
     ie_feature: false                   # 是否扫描仅能在 ie 下利用的 xss
   xxe:
