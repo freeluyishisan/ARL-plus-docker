@@ -2,6 +2,7 @@ import json
 import os.path
 import subprocess
 import logging
+import re
 
 from app import utils
 
@@ -20,8 +21,8 @@ logger = logging.getLogger(__name__)
 
 class NucleiScan(object):
     def __init__(self, targets: list):
-        self.targets = targets
-        logger.debug(f"初始化 NucleiScan，目标数量: {len(targets)}, 目标: {targets}")
+        self.targets = [str(t).strip() for t in targets if t]  # 清理目标列表
+        logger.debug(f"初始化 NucleiScan，目标数量: {len(self.targets)}, 目标: {self.targets}")
 
         tmp_path = "/tmp"
         rand_str = utils.random_choices()
@@ -46,15 +47,24 @@ class NucleiScan(object):
             if not self.targets:
                 logger.error("目标列表为空，无法生成目标文件")
                 raise ValueError("目标列表为空")
+            valid_domains = []
+            for domain in self.targets:
+                domain = domain.strip()
+                if not domain:
+                    logger.warning(f"跳过空域名")
+                    continue
+                # 验证域名格式
+                if not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9.-]{0,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$', domain):
+                    logger.warning(f"域名格式无效: {domain}")
+                    continue
+                valid_domains.append(domain)
+            if not valid_domains:
+                logger.error("无有效域名，无法生成目标文件")
+                raise ValueError("无有效域名")
             with open(self.nuclei_target_path, "w") as f:
-                for domain in self.targets:
-                    domain = domain.strip()
-                    if not domain:
-                        logger.warning(f"跳过空域名: {domain}")
-                        continue
+                for domain in valid_domains:
                     f.write(domain + "\n")
-            logger.info(f"成功生成目标文件: {self.nuclei_target_path}")
-            # 验证文件存在
+            logger.info(f"成功生成目标文件: {self.nuclei_target_path}, 有效域名数: {len(valid_domains)}")
             if not os.path.exists(self.nuclei_target_path):
                 logger.error(f"目标文件未创建: {self.nuclei_target_path}")
                 raise FileNotFoundError(f"目标文件未创建: {self.nuclei_target_path}")
@@ -108,6 +118,9 @@ class NucleiScan(object):
             if not domain:
                 logger.warning(f"跳过空域名")
                 continue
+            if not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9.-]{0,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$', domain):
+                logger.warning(f"域名格式无效: {domain}")
+                continue
             rad_output_path = os.path.join("/tmp", f"rad_output_{domain.replace('.', '_')}_{utils.random_choices()}.txt")
             rad_command = [
                 self.rad_bin_path,
@@ -117,13 +130,18 @@ class NucleiScan(object):
             logger.info(f"运行 rad 命令: {' '.join(rad_command)}")
             print(rad_command)
             try:
-                # 验证 rad 二进制是否存在
-                if not os.path.exists(self.rad_bin_path):
-                    which_rad = subprocess.run(["which", "rad"], capture_output=True, text=True)
+                # 验证 rad 二进制
+                try:
+                    which_rad = subprocess.run(["which", "rad"], capture_output=True, text=True, timeout=5)
                     if which_rad.returncode != 0:
                         logger.error(f"rad 二进制未找到: {self.rad_bin_path}")
                         continue
                     self.rad_bin_path = which_rad.stdout.strip()
+                    logger.debug(f"rad 二进制路径: {self.rad_bin_path}")
+                except Exception as e:
+                    logger.error(f"检查 rad 二进制失败: {e}")
+                    continue
+                # 执行 rad
                 result = subprocess.run(
                     rad_command,
                     capture_output=True,
@@ -137,9 +155,13 @@ class NucleiScan(object):
                     logger.error(f"rad 执行失败 for {domain}，退出码: {result.returncode}")
                 else:
                     logger.info(f"rad 执行成功 for {domain}，输出文件: {rad_output_path}")
-                    # 验证输出文件
                     if not os.path.exists(rad_output_path):
                         logger.warning(f"rad 输出文件未创建: {rad_output_path}")
+                        with open(rad_output_path, "w") as f:
+                            f.write(result.stdout)
+                        logger.info(f"保存 rad stdout 到: {rad_output_path}")
+                        if os.path.exists(rad_output_path):
+                            logger.info(f"确认输出文件已创建: {rad_output_path}")
             except subprocess.TimeoutExpired:
                 logger.error(f"rad 执行超时（1小时）for {domain}")
             except FileNotFoundError:
