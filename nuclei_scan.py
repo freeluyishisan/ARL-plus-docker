@@ -23,9 +23,12 @@ class NucleiScan(object):
         self.vscan_result_path = os.path.join(tmp_path,
                                               "vscan_result_{}.json".format(rand_str))
 
+        self.rad_output_path = os.path.join(tmp_path,
+                                            "rad_output_{}.txt".format(rand_str))  # Added for rad output
+
         self.nuclei_bin_path = "nuclei"
         self.vscan_bin_path = "vscan"
-        self.rad_bin_path = "rad"  # Added path for rad binary
+        self.rad_bin_path = "rad"  # Path for rad binary
 
         # 在nuclei 2.9.1 中 将-json 参数改成了 -jsonl 参数。
         self.nuclei_json_flag = None
@@ -38,6 +41,8 @@ class NucleiScan(object):
                 os.unlink(self.nuclei_result_path)
             if os.path.exists(self.vscan_result_path):
                 os.unlink(self.vscan_result_path)
+            if os.path.exists(self.rad_output_path):
+                os.unlink(self.rad_output_path)  # Clean up rad output file
         except Exception as e:
             logger.warning(e)
 
@@ -87,8 +92,9 @@ class NucleiScan(object):
         # Execute rad command with proxy
         rad_command = [
             self.rad_bin_path,
-            "-t {}".format(self.nuclei_target_path),
-            "-text-output", "1.txt"
+            "-t {}".format(self.nuclei_target_path),  # Fixed to use nuclei_target_path
+            #"-http-proxy", "127.0.0.1:7777",  # Added proxy as requested
+            "-text-output", self.rad_output_path  # Use unique output file
         ]
         logger.info(" ".join(rad_command))
         print(rad_command)
