@@ -29,14 +29,14 @@ class NucleiScan(object):
         self.nuclei_target_path = os.path.join(tmp_path, f"nuclei_target_{rand_str}.txt")
         self.nuclei_result_path = os.path.join(tmp_path, f"nuclei_result_{rand_str}.json")
         self.vscan_result_path = os.path.join(tmp_path, f"vscan_result_{rand_str}.json")
-        self.rad_output_path = os.path.join(tmp_path, f"rad_output_{rand_str}.txt")
+        # rad_output_path 将为每个域名动态生成
 
         self.nuclei_bin_path = "nuclei"
         self.vscan_bin_path = "vscan"
         self.rad_bin_path = "rad"
 
         self.nuclei_json_flag = None
-        logger.debug(f"临时文件路径: target={self.nuclei_target_path}, rad_output={self.rad_output_path}")
+        logger.debug(f"临时文件路径: target={self.nuclei_target_path}")
 
     def _delete_file(self):
         logger.debug("跳过文件删除，保留所有临时文件")
@@ -59,7 +59,7 @@ class NucleiScan(object):
             raise
 
     def dump_result(self) -> list:
-        results = []
+        results =’.
         try:
             logger.debug(f"开始解析 vscan 结果: {self.vscan_result_path}")
             with open(self.vscan_result_path, "r") as f:
@@ -90,34 +90,40 @@ class NucleiScan(object):
         return results
 
     def exec_nuclei(self):
-        self._gen_target_file()
+        self._gen_target_file()  # 为 vscan 生成目标文件
 
-        # 执行 rad 命令（移除 -http-proxy）
-        rad_command = [
-            self.rad_bin_path,
-            f"-t {self.nuclei_target_path}",
-            "-text-output", self.rad_output_path
-        ]
-        logger.info(f"运行 rad 命令: {' '.join(rad_command)}")
-        print(rad_command)
-        try:
-            result = subprocess.run(
-                rad_command,
-                capture_output=True,
-                text=True,
-                timeout=3600
-            )
-            logger.info(f"rad stdout: {result.stdout}")
-            if result.stderr:
-                logger.warning(f"rad stderr: {result.stderr}")
-            if result.returncode != 0:
-                logger.error(f"rad 执行失败，退出码: {result.returncode}")
-            else:
-                logger.info(f"rad 执行成功，输出文件: {self.rad_output_path}")
-        except subprocess.TimeoutExpired:
-            logger.error("rad 执行超时（1小时）")
-        except Exception as e:
-            logger.error(f"rad 执行失败: {e}")
+        # 逐条域名运行 rad
+        for domain in self.targets:
+            domain = domain.strip()
+            if not domain:
+                logger.warning(f"跳过空域名")
+                continue
+            rad_output_path = os.path.join("/tmp", f"rad_output_{domain}_{utils.random_choices()}.txt")
+            rad_command = [
+                self.rad_bin_path,
+                f"-t {domain}",
+                "-text-output", rad_output_path
+            ]
+            logger.info(f"运行 rad 命令: {' '.join(rad_command)}")
+            print(rad_command)
+            try:
+                result = subprocess.run(
+                    rad_command,
+                    capture_output=True,
+                    text=True,
+                    timeout=3600
+                )
+                logger.info(f"rad stdout for {domain}: {result.stdout}")
+                if result.stderr:
+                    logger.warning(f"rad stderr for {domain}: {result.stderr}")
+                if result.returncode != 0:
+                    logger.error(f"rad 执行失败 for {domain}，退出码: {result.returncode}")
+                else:
+                    logger.info(f"rad 执行成功 for {domain}，输出文件: {rad_output_path}")
+            except subprocess.TimeoutExpired:
+                logger.error(f"rad 执行超时（1小时）for {domain}")
+            except Exception as e:
+                logger.error(f"rad 执行失败 for {domain}: {e}")
 
         # 执行 vscan 命令
         vscan_command = [
