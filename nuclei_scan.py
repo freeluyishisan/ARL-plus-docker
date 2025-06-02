@@ -6,11 +6,11 @@ import logging
 from app.config import Config
 from app import utils
 
-# 配置日志输出到 /tmp/
+# 配置日志到 /tmp/
 rand_str = utils.random_choices()
 log_file = f"/tmp/nuclei_scan_{rand_str}.log"
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,  # 使用 DEBUG 级别以捕获更多信息
     format='%(asctime)s %(levelname)s %(message)s',
     handlers=[
         logging.FileHandler(log_file),
@@ -22,8 +22,9 @@ logger = logging.getLogger(__name__)
 class NucleiScan(object):
     def __init__(self, targets: list):
         self.targets = targets
+        logger.debug(f"初始化 NucleiScan，目标数量: {len(targets)}")
 
-        tmp_path = "/tmp"  # 明确使用 /tmp/
+        tmp_path = "/tmp"
         rand_str = utils.random_choices()
 
         self.nuclei_target_path = os.path.join(tmp_path,
@@ -33,34 +34,29 @@ class NucleiScan(object):
         self.vscan_result_path = os.path.join(tmp_path,
                                               f"vscan_result_{rand_str}.json")
         self.rad_output_path = os.path.join(tmp_path,
-                                            f"rad_output_{rand_str}.txt")  # rad 输出到 /tmp/
+                                            f"rad_output_{rand_str}.txt")
 
         self.nuclei_bin_path = "nuclei"
         self.vscan_bin_path = "vscan"
         self.rad_bin_path = "rad"
 
         self.nuclei_json_flag = None
+        logger.debug(f"临时文件路径: target={self.nuclei_target_path}, rad_output={self.rad_output_path}")
 
     def _delete_file(self):
-        try:
-            os.unlink(self.nuclei_target_path)
-            if os.path.exists(self.nuclei_result_path):
-                os.unlink(self.nuclei_result_path)
-            if os.path.exists(self.vscan_result_path):
-                os.unlink(self.vscan_result_path)
-            # 不删除 rad_output_path 以便测试
-        except Exception as e:
-            logger.warning(f"删除文件失败: {e}")
+        # 不删除任何文件以便测试
+        logger.debug("跳过文件删除，保留所有临时文件")
 
     def _gen_target_file(self):
         try:
+            logger.debug(f"开始生成目标文件: {self.nuclei_target_path}")
             with open(self.nuclei_target_path, "w") as f:
                 for domain in self.targets:
                     domain = domain.strip()
                     if not domain:
                         continue
                     f.write(domain + "\n")
-            logger.info(f"生成目标文件: {self.nuclei_target_path}")
+            logger.info(f"成功生成目标文件: {self.nuclei_target_path}")
         except Exception as e:
             logger.error(f"生成目标文件失败: {e}")
             raise
@@ -68,6 +64,7 @@ class NucleiScan(object):
     def dump_result(self) -> list:
         results = []
         try:
+            logger.debug(f"开始解析 vscan 结果: {self.vscan_result_path}")
             with open(self.vscan_result_path, "r") as f:
                 while True:
                     line = f.readline()
@@ -90,7 +87,7 @@ class NucleiScan(object):
                         "target": data.get("url", "")
                     }
                     results.append(item)
-            logger.info(f"成功解析 vscan 结果: {self.vscan_result_path}")
+            logger.info(f"成功解析 vscan 结果，条目数: {len(results)}")
         except Exception as e:
             logger.error(f"解析 vscan 结果失败: {e}")
         return results
@@ -112,7 +109,7 @@ class NucleiScan(object):
                 rad_command,
                 capture_output=True,
                 text=True,
-                timeout=3600  # 缩短为 1 小时，便于调试
+                timeout=3600  # 1 小时超时
             )
             logger.info(f"rad stdout: {result.stdout}")
             if result.stderr:
@@ -142,14 +139,17 @@ class NucleiScan(object):
             logger.error(f"vscan 执行失败: {e}")
 
     def run(self):
+        logger.debug("开始运行 NucleiScan")
         self.exec_nuclei()
         results = self.dump_result()
-        self._delete_file()
+        self._delete_file()  # 实际不删除文件
+        logger.debug(f"扫描完成，结果条目数: {len(results)}")
         return results
 
 def nuclei_scan(targets: list):
     if not targets:
         logger.warning("目标列表为空")
         return []
+    logger.debug(f"启动 nuclei_scan，目标: {targets}")
     n = NucleiScan(targets=targets)
     return n.run()
