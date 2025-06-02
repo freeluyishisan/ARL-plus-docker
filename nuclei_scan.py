@@ -1,4 +1,5 @@
 import json
+import os
 import os.path
 import subprocess
 import logging
@@ -7,7 +8,11 @@ import re
 from app import utils
 
 # 配置日志到 /tmp/
-rand_str = utils.random_choices()
+try:
+    rand_str = utils.random_choices()
+except Exception as e:
+    logger.error(f"utils.random_choices() 失败: {e}")
+    rand_str = str(os.urandom(8).hex())  # 备选随机字符串
 log_file = f"/tmp/nuclei_scan_{rand_str}.log"
 logging.basicConfig(
     level=logging.DEBUG,
@@ -21,11 +26,16 @@ logger = logging.getLogger(__name__)
 
 class NucleiScan(object):
     def __init__(self, targets: list):
-        self.targets = [str(t).strip() for t in targets if t]  # 清理目标列表
+        # 清理目标列表
+        self.targets = [str(t).strip() for t in targets if t and str(t).strip()]
         logger.debug(f"初始化 NucleiScan，目标数量: {len(self.targets)}, 目标: {self.targets}")
 
         tmp_path = "/tmp"
-        rand_str = utils.random_choices()
+        try:
+            rand_str = utils.random_choices()
+        except Exception as e:
+            logger.error(f"utils.random_choices() 失败: {e}")
+            rand_str = str(os.urandom(8).hex())
 
         self.nuclei_target_path = os.path.join(tmp_path, f"nuclei_target_{rand_str}.txt")
         self.nuclei_result_path = os.path.join(tmp_path, f"nuclei_result_{rand_str}.json")
@@ -49,7 +59,6 @@ class NucleiScan(object):
                 raise ValueError("目标列表为空")
             valid_domains = []
             for domain in self.targets:
-                domain = domain.strip()
                 if not domain:
                     logger.warning(f"跳过空域名")
                     continue
@@ -112,16 +121,33 @@ class NucleiScan(object):
     def exec_nuclei(self):
         self._gen_target_file()
 
+        # 验证 rad 二进制
+        try:
+            which_rad = subprocess.run(["which", "rad"], capture_output=True, text=True, timeout=5)
+            if which_rad.returncode != 0:
+                logger.error(f"rad 二进制未找到: {self.rad_bin_path}")
+                return
+            self.rad_bin_path = which_rad.stdout.strip()
+            logger.debug(f"rad 二进制路径: {self.rad_bin_path}")
+        except Exception as e:
+            logger.error(f"检查 rad 二进制失败: {e}")
+            return
+
         # 逐条域名运行 rad
         for domain in self.targets:
-            domain = domain.strip()
+            logger.debug(f"处理域名: {domain}")
             if not domain:
-                logger.warning(f"跳过空域名")
+                logger.warning(f"即将跳过空域名")
                 continue
             if not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9.-]{0,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$', domain):
                 logger.warning(f"域名格式无效: {domain}")
                 continue
-            rad_output_path = os.path.join("/tmp", f"rad_output_{domain.replace('.', '_')}_{utils.random_choices()}.txt")
+            try:
+                rand_str = utils.random_choices()
+            except Exception as e:
+                logger.error(f"utils.random_choices() 失败 for {domain}: {e}")
+                rand_str = str(os.urandom(8).hex())
+            rad_output_path = os.path.join("/tmp", f"rad_output_{domain.replace('.', '_')}_{rand_str}.txt")
             rad_command = [
                 self.rad_bin_path,
                 f"-t {domain}",
@@ -130,18 +156,6 @@ class NucleiScan(object):
             logger.info(f"运行 rad 命令: {' '.join(rad_command)}")
             print(rad_command)
             try:
-                # 验证 rad 二进制
-                try:
-                    which_rad = subprocess.run(["which", "rad"], capture_output=True, text=True, timeout=5)
-                    if which_rad.returncode != 0:
-                        logger.error(f"rad 二进制未找到: {self.rad_bin_path}")
-                        continue
-                    self.rad_bin_path = which_rad.stdout.strip()
-                    logger.debug(f"rad 二进制路径: {self.rad_bin_path}")
-                except Exception as e:
-                    logger.error(f"检查 rad 二进制失败: {e}")
-                    continue
-                # 执行 rad
                 result = subprocess.run(
                     rad_command,
                     capture_output=True,
