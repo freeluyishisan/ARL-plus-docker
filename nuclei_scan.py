@@ -128,7 +128,7 @@ class NucleiScan(object):
             rad_cmd = [
                 "rad",
                 "-t", domain,
-                "-http-proxy", "127.0.0.1:7777",  # 添加代理参数
+                "-http-proxy", "172.18.0.1:7777",  # 添加代理参数
                 "-text-output", rad_result_path
             ]
             logger.info(f"Executing rad command: {' '.join(rad_cmd)}")
