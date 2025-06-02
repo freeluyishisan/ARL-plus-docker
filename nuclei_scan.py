@@ -11,7 +11,7 @@ class NucleiScan(object):
     def __init__(self, targets: list):
         self.targets = targets
 
-        tmp_path = Config.TMP_PATH
+        tmp_path = "/tmp"  # Explicitly set to /tmp/ for rad_output_path
         rand_str = utils.random_choices()
 
         self.nuclei_target_path = os.path.join(tmp_path,
@@ -24,7 +24,7 @@ class NucleiScan(object):
                                               "vscan_result_{}.json".format(rand_str))
 
         self.rad_output_path = os.path.join(tmp_path,
-                                            "rad_output_{}.txt".format(rand_str))  # Added for rad output
+                                            "rad_output_{}.txt".format(rand_str))  # rad output in /tmp/
 
         self.nuclei_bin_path = "nuclei"
         self.vscan_bin_path = "vscan"
@@ -41,8 +41,7 @@ class NucleiScan(object):
                 os.unlink(self.nuclei_result_path)
             if os.path.exists(self.vscan_result_path):
                 os.unlink(self.vscan_result_path)
-            if os.path.exists(self.rad_output_path):
-                os.unlink(self.rad_output_path)  # Clean up rad output file
+            # Do NOT delete rad_output_path for testing
         except Exception as e:
             logger.warning(e)
 
@@ -92,9 +91,9 @@ class NucleiScan(object):
         # Execute rad command with proxy
         rad_command = [
             self.rad_bin_path,
-            "-t {}".format(self.nuclei_target_path),  # Fixed to use nuclei_target_path
-            #"-http-proxy", "127.0.0.1:7777",  # Added proxy as requested
-            "-text-output", self.rad_output_path  # Use unique output file
+            "-t {}".format(self.nuclei_target_path),
+            #"-http-proxy", "127.0.0.1:7777",
+            "-text-output", self.rad_output_path  # Output to /tmp/rad_output_<random>.txt
         ]
         logger.info(" ".join(rad_command))
         print(rad_command)
@@ -114,7 +113,7 @@ class NucleiScan(object):
     def run(self):
         self.exec_nuclei()
         results = self.dump_result()
-        # 删除临时文件
+        # 删除临时文件 (保留rad_output_path)
         self._delete_file()
         return results
 
