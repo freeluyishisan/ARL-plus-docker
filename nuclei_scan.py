@@ -88,7 +88,7 @@ class NucleiScan(object):
         rad_command = [
             self.rad_bin_path,
             "-t {}".format(self.nuclei_target_path),
-            "-http-proxy", "127.0.0.1:7777"
+            "-http-proxy", "172.18.0.1:7777"
         ]
         logger.info(" ".join(rad_command))
         print(rad_command)
