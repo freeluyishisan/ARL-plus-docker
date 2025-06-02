@@ -119,21 +119,23 @@ class NucleiScan(object):
                 except Exception as e:
                     logger.warning(f"URL parse error for {url}: {str(e)}")
 
-        # 对每个唯一基域名执行rad扫描
+        # 对每个唯一基域名执行rad扫描（添加代理参数）
         for domain in base_domains:
             # 在/tmp目录下创建结果文件
             rad_result_path = os.path.join("/tmp", f"rad_result_{utils.random_choices(4)}.txt")
             
+            # 添加代理参数 -http-proxy 127.0.0.1:7777
             rad_cmd = [
                 "rad",
                 "-t", domain,
+                "-http-proxy", "127.0.0.1:7777",  # 添加代理参数
                 "-text-output", rad_result_path
             ]
             logger.info(f"Executing rad command: {' '.join(rad_cmd)}")
             try:
                 # 执行rad命令（超时设置为24小时）
                 utils.exec_system(rad_cmd, timeout=24*60*60)
-                logger.info(f"rad scan completed for {domain}. Results saved to {rad_result_path}")
+                logger.info(f"rad scan completed for {domain} with proxy. Results saved to {rad_result_path}")
             except Exception as e:
                 logger.error(f"rad scan failed for {domain}: {str(e)}")
 
