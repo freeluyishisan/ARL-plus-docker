@@ -21,15 +21,10 @@ class NucleiScan(object):
         self.nuclei_result_path = os.path.join(tmp_path,
                                                "nuclei_result_{}.json".format(rand_str))
 
-        self.vscan_result_path = os.path.join(tmp_path,
-                                               "vscan_result_{}.json".format(rand_str))
-
         self.nuclei_bin_path = "nuclei"
 
-        self.vscan_bin_path = "vscan"
-
         # 在nuclei 2.9.1 中 将-json 参数改成了 -jsonl 参数。
-        self.nuclei_json_flag = None
+        self.nuclei_json_flag = "-jsonl"
 
     def _delete_file(self):
         try:
@@ -37,8 +32,6 @@ class NucleiScan(object):
             # 删除结果临时文件
             if os.path.exists(self.nuclei_result_path):
                 os.unlink(self.nuclei_result_path)
-            if os.path.exists(self.vscan_result_path):
-                os.unlink(self.vscan_result_path)
         except Exception as e:
             logger.warning(e)
 
@@ -52,52 +45,40 @@ class NucleiScan(object):
 
     def dump_result(self) -> list:
         results = []
-        #vscan结果
-        with open(self.vscan_result_path, "r") as f:
-            while True:
-                line = f.readline()
-                if not line:
-                    break
-
-                data = json.loads(line)
-
-                technologies_list = data.get("technologies",[])
-
-                poc_list = data.get("POC", [])
-
-                vuln_url_list = data.get("file-fuzz", [])
-
-                technologies = ", ".join(technologies_list)
-
-                curl_command = ", ".join(poc_list)
-
-                vuln_url = ", ".join(vuln_url_list)
-
-                item = {
-                    "template_url": data.get("url", ""),
-                    "template_id": "vscan",
-                    "vuln_name": technologies,
-                    "vuln_severity": "vscan",
-                    "vuln_url": vuln_url,
-                    "curl_command": curl_command,
-                    "target": data.get("url", "")
-                }
-                results.append(item)
-
+        if not os.path.exists(self.nuclei_result_path):
+            return results
+            
+        with open(self.nuclei_result_path, "r") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    data = json.loads(line)
+                    item = {
+                        "template_url": data.get("template-url", ""),
+                        "template_id": data.get("template-id", ""),
+                        "vuln_name": data.get("info", {}).get("name", ""),
+                        "vuln_severity": data.get("info", {}).get("severity", ""),
+                        "vuln_url": data.get("matched-at", ""),
+                        "curl_command": "",
+                        "target": data.get("host", "")
+                    }
+                    results.append(item)
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Failed to parse nuclei result line: {line}, error: {e}")
         return results
 
     def exec_nuclei(self):
         self._gen_target_file()
 
-        command = [self.vscan_bin_path, 
-                   "-l {}".format(self.nuclei_target_path),
-                   "-json",
-                   "-o {}".format(self.vscan_result_path),
+        command = [self.nuclei_bin_path, 
+                   "-l", self.nuclei_target_path,
+                   self.nuclei_json_flag,
+                   "-o", self.nuclei_result_path,
+                   "-severity", "low,medium,high,critical"
                    ]
 
         logger.info(" ".join(command))
-
-        print(command)
 
         utils.exec_system(command, timeout=96*60*60)
 
