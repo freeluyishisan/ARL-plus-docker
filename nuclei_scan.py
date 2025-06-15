@@ -23,13 +23,13 @@ class NucleiScan(object):
 
         self.nuclei_bin_path = "nuclei"
 
-        # 在nuclei 2.9.1 中 将-json 参数改成了 -jsonl 参数。
+        # 使用-jsonl参数（新版本nuclei）
         self.nuclei_json_flag = "-jsonl"
 
     def _delete_file(self):
         try:
-            os.unlink(self.nuclei_target_path)
-            # 删除结果临时文件
+            if os.path.exists(self.nuclei_target_path):
+                os.unlink(self.nuclei_target_path)
             if os.path.exists(self.nuclei_result_path):
                 os.unlink(self.nuclei_result_path)
         except Exception as e:
@@ -46,6 +46,7 @@ class NucleiScan(object):
     def dump_result(self) -> list:
         results = []
         if not os.path.exists(self.nuclei_result_path):
+            logger.warning(f"Nuclei result file not found: {self.nuclei_result_path}")
             return results
             
         with open(self.nuclei_result_path, "r") as f:
@@ -71,20 +72,42 @@ class NucleiScan(object):
     def exec_nuclei(self):
         self._gen_target_file()
 
-        command = [self.nuclei_bin_path, 
-                   "-l", self.nuclei_target_path,
-                   self.nuclei_json_flag,
-                   "-o", self.nuclei_result_path,
-                   "-severity", "low,medium,high,critical"
-                   ]
+        command = [
+            self.nuclei_bin_path,
+            "-list", self.nuclei_target_path,  # 使用-list参数加载目标列表
+            self.nuclei_json_flag,
+            "-o", self.nuclei_result_path,
+            "-severity", "low,medium,high,critical",
+            "-silent"  # 减少控制台输出
+        ]
 
-        logger.info(" ".join(command))
+        logger.info("Running nuclei command: " + " ".join(command))
 
-        utils.exec_system(command, timeout=96*60*60)
+        try:
+            # 使用subprocess.run以便更好地捕获输出和错误
+            result = subprocess.run(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=24*60*60  # 24小时超时
+            )
+            
+            if result.returncode != 0:
+                logger.error(f"Nuclei failed with error:\n{result.stderr}")
+            else:
+                logger.info(f"Nuclei completed successfully. Output size: {len(result.stdout)} bytes")
+                
+        except subprocess.TimeoutExpired:
+            logger.warning("Nuclei scan timed out")
+        except Exception as e:
+            logger.error(f"Error executing nuclei: {str(e)}")
 
     def run(self):
+        logger.info("Starting nuclei scan...")
         self.exec_nuclei()
         results = self.dump_result()
+        logger.info(f"Nuclei scan completed. Found {len(results)} results.")
 
         # 提取唯一的基域名（协议+域名+端口）
         base_domains = set()
@@ -99,23 +122,24 @@ class NucleiScan(object):
                 except Exception as e:
                     logger.warning(f"URL parse error for {url}: {str(e)}")
 
-        for domain in base_domains:
-            # 在/tmp目录下创建结果文件
-            rad_result_path = os.path.join("/tmp", f"rad_result_{utils.random_choices(4)}.txt")
-            
-            rad_cmd = [
-                "rad",
-                "-t", domain,
-                "-http-proxy", "172.18.0.1:7777",  # 添加代理参数
-                "-text-output", rad_result_path
-            ]
-            logger.info(f"Executing rad command: {' '.join(rad_cmd)}")
-            try:
-                # 执行rad命令（超时设置为240小时）
-                utils.exec_system(rad_cmd, timeout=240*60*60)
-                logger.info(f"rad scan completed for {domain} with proxy. Results saved to {rad_result_path}")
-            except Exception as e:
-                logger.error(f"rad scan failed for {domain}: {str(e)}")
+        # 执行rad扫描
+        if base_domains:
+            logger.info(f"Starting rad scan for {len(base_domains)} base domains...")
+            for domain in base_domains:
+                rad_result_path = os.path.join("/tmp", f"rad_result_{utils.random_choices(4)}.txt")
+                
+                rad_cmd = [
+                    "rad",
+                    "-t", domain,
+                    "-http-proxy", "172.18.0.1:7777",
+                    "-text-output", rad_result_path
+                ]
+                logger.info(f"Executing rad command: {' '.join(rad_cmd)}")
+                try:
+                    utils.exec_system(rad_cmd, timeout=240*60*60)
+                    logger.info(f"rad scan completed for {domain}")
+                except Exception as e:
+                    logger.error(f"rad scan failed for {domain}: {str(e)}")
 
         # 删除临时文件
         self._delete_file()
@@ -125,7 +149,9 @@ class NucleiScan(object):
 
 def nuclei_scan(targets: list):
     if not targets:
+        logger.warning("No targets provided for nuclei scan")
         return []
 
+    logger.info(f"Initializing nuclei scan for {len(targets)} targets")
     n = NucleiScan(targets=targets)
     return n.run()
