@@ -25,12 +25,12 @@ class NucleiScan(object):
 
     def _delete_file(self):
         try:
-            os.unlink(self.nuclei_target_path)
-            # 删除结果临时文件
+            if os.path.exists(self.nuclei_target_path):
+                os.unlink(self.nuclei_target_path)
             if os.path.exists(self.nuclei_result_path):
                 os.unlink(self.nuclei_result_path)
         except Exception as e:
-            logger.warning(e)
+            logger.warning(f"Error deleting temporary files: {str(e)}")
 
     def _gen_target_file(self):
         with open(self.nuclei_target_path, "w") as f:
@@ -42,21 +42,22 @@ class NucleiScan(object):
 
     def dump_result(self) -> list:
         results = []
-        # 解析nuclei的jsonl结果
+        # 检查结果文件是否存在
         if not os.path.exists(self.nuclei_result_path):
             logger.warning(f"Nuclei result file not found: {self.nuclei_result_path}")
             return results
             
+        # 解析nuclei的jsonl结果
         with open(self.nuclei_result_path, "r") as f:
             for line in f:
                 try:
                     data = json.loads(line.strip())
-                    # 映射nuclei字段到原有结构
+                    # 直接从顶层字段获取所需信息
                     item = {
                         "template_url": data.get("matched-at", ""),
                         "template_id": data.get("template-id", ""),
-                        "vuln_name": data.get("info", {}).get("name", ""),
-                        "vuln_severity": data.get("info", {}).get("severity", ""),
+                        "vuln_name": data.get("name", ""),  # 直接使用顶层name字段
+                        "vuln_severity": data.get("severity", ""),  # 直接使用顶层severity字段
                         "vuln_url": data.get("host", ""),
                         "curl_command": data.get("curl-command", ""),
                         "target": data.get("host", "")
