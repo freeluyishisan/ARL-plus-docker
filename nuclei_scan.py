@@ -43,6 +43,10 @@ class NucleiScan(object):
     def dump_result(self) -> list:
         results = []
         # 解析nuclei的jsonl结果
+        if not os.path.exists(self.nuclei_result_path):
+            logger.warning(f"Nuclei result file not found: {self.nuclei_result_path}")
+            return results
+            
         with open(self.nuclei_result_path, "r") as f:
             for line in f:
                 try:
@@ -60,7 +64,45 @@ class NucleiScan(object):
                     results.append(item)
                 except json.JSONDecodeError:
                     logger.warning(f"Invalid JSON line: {line}")
+                except Exception as e:
+                    logger.error(f"Error parsing Nuclei result: {str(e)}")
         return results
+
+    def run_rad_scan(self):
+        """对每个目标运行RAD扫描"""
+        for target in self.targets:
+            target = target.strip()
+            if not target:
+                continue
+                
+            try:
+                # 解析URL获取基域名
+                parsed = urlparse(target)
+                if not parsed.scheme or not parsed.netloc:
+                    logger.warning(f"Invalid target format: {target}")
+                    continue
+                    
+                domain = f"{parsed.scheme}://{parsed.netloc}"
+                
+                logger.info(f"Starting RAD scan for: {domain}")
+                
+                # 在/tmp目录下创建结果文件
+                rad_result_path = os.path.join("/tmp", f"rad_result_{utils.random_choices(4)}.txt")
+                
+                rad_cmd = [
+                    "rad",
+                    "-t", domain,
+                    "-http-proxy", "172.18.0.1:7777",  # 添加代理参数
+                    "-text-output", rad_result_path
+                ]
+                logger.info(f"Executing rad command: {' '.join(rad_cmd)}")
+                
+                # 执行rad命令（超时设置为4小时）
+                utils.exec_system(rad_cmd, timeout=4*60*60)
+                logger.info(f"RAD scan completed for {domain}. Results saved to {rad_result_path}")
+                
+            except Exception as e:
+                logger.error(f"RAD scan failed for {target}: {str(e)}")
 
     def exec_nuclei(self):
         self._gen_target_file()
@@ -77,41 +119,16 @@ class NucleiScan(object):
         utils.exec_system(command, timeout=96*60*60)
 
     def run(self):
+        # 1. 首先运行RAD扫描
+        self.run_rad_scan()
+        
+        # 2. 运行Nuclei扫描
         self.exec_nuclei()
+        
+        # 3. 解析Nuclei结果
         results = self.dump_result()
 
-        # 提取唯一的基域名（协议+域名+端口）
-        base_domains = set()
-        for item in results:
-            url = item.get("target", "")
-            if url:
-                try:
-                    parsed = urlparse(url)
-                    if parsed.scheme and parsed.netloc:
-                        base_url = f"{parsed.scheme}://{parsed.netloc}"
-                        base_domains.add(base_url)
-                except Exception as e:
-                    logger.warning(f"URL parse error for {url}: {str(e)}")
-
-        for domain in base_domains:
-            # 在/tmp目录下创建结果文件
-            rad_result_path = os.path.join("/tmp", f"rad_result_{utils.random_choices(4)}.txt")
-            
-            rad_cmd = [
-                "rad",
-                "-t", domain,
-                "-http-proxy", "172.18.0.1:7777",  # 添加代理参数
-                "-text-output", rad_result_path
-            ]
-            logger.info(f"Executing rad command: {' '.join(rad_cmd)}")
-            try:
-                # 执行rad命令（超时设置为240小时）
-                utils.exec_system(rad_cmd, timeout=240*60*60)
-                logger.info(f"rad scan completed for {domain} with proxy. Results saved to {rad_result_path}")
-            except Exception as e:
-                logger.error(f"rad scan failed for {domain}: {str(e)}")
-
-        # 删除临时文件
+        # 4. 删除临时文件
         self._delete_file()
 
         return results
