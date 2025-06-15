@@ -86,36 +86,45 @@ class NucleiScan(object):
         self.exec_nuclei()
         results = self.dump_result()
 
-        # 提取唯一的基域名（协议+域名+端口）
+        # 修复：直接从输入目标提取基域名，而不是依赖nuclei结果
         base_domains = set()
-        for item in results:
-            url = item.get("target", "")
-            if url:
-                try:
-                    parsed = urlparse(url)
-                    if parsed.scheme and parsed.netloc:
-                        base_url = f"{parsed.scheme}://{parsed.netloc}"
-                        base_domains.add(base_url)
-                except Exception as e:
-                    logger.warning(f"URL parse error for {url}: {str(e)}")
-
-        for domain in base_domains:
-            # 在/tmp目录下创建结果文件
-            rad_result_path = os.path.join("/tmp", f"rad_result_{utils.random_choices(4)}.txt")
-            
-            rad_cmd = [
-                "rad",
-                "-t", domain,
-                "-http-proxy", "172.18.0.1:7777",  # 添加代理参数
-                "-text-output", rad_result_path
-            ]
-            logger.info(f"Executing rad command: {' '.join(rad_cmd)}")
+        for target in self.targets:
+            target = target.strip()
+            if not target:
+                continue
             try:
-                # 执行rad命令（超时设置为240小时）
-                utils.exec_system(rad_cmd, timeout=240*60*60)
-                logger.info(f"rad scan completed for {domain} with proxy. Results saved to {rad_result_path}")
+                # 确保目标有协议
+                if not target.startswith("http"):
+                    target = "http://" + target
+                    
+                parsed = urlparse(target)
+                if parsed.scheme and parsed.netloc:
+                    base_url = f"{parsed.scheme}://{parsed.netloc}"
+                    base_domains.add(base_url)
             except Exception as e:
-                logger.error(f"rad scan failed for {domain}: {str(e)}")
+                logger.warning(f"URL parse error for {target}: {str(e)}")
+
+        # 确保至少有一个目标时执行rad扫描
+        if base_domains:
+            for domain in base_domains:
+                # 在/tmp目录下创建结果文件
+                rad_result_path = os.path.join("/tmp", f"rad_result_{utils.random_choices(4)}.txt")
+                
+                rad_cmd = [
+                    "rad",
+                    "-t", domain,
+                    "-http-proxy", "172.18.0.1:7777",  # 添加代理参数
+                    "-text-output", rad_result_path
+                ]
+                logger.info(f"Executing rad command: {' '.join(rad_cmd)}")
+                try:
+                    # 执行rad命令（超时设置为240小时）
+                    utils.exec_system(rad_cmd, timeout=240*60*60)
+                    logger.info(f"rad scan completed for {domain} with proxy. Results saved to {rad_result_path}")
+                except Exception as e:
+                    logger.error(f"rad scan failed for {domain}: {str(e)}")
+        else:
+            logger.warning("No valid base domains found for rad scan")
 
         # 删除临时文件
         self._delete_file()
