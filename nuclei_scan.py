@@ -56,8 +56,8 @@ class NucleiScan(object):
                     item = {
                         "template_url": data.get("matched-at", ""),
                         "template_id": data.get("template-id", ""),
-                        "vuln_name": data.get("name", ""),  # 直接使用顶层name字段
-                        "vuln_severity": data.get("severity", ""),  # 直接使用顶层severity字段
+                        "vuln_name": data.get("info", {}).get("name", ""),
+                        "vuln_severity": data.get("info", {}).get("severity", ""),
                         "vuln_url": data.get("host", ""),
                         "curl_command": data.get("curl-command", ""),
                         "target": data.get("host", "")
@@ -108,10 +108,12 @@ class NucleiScan(object):
     def exec_nuclei(self):
         self._gen_target_file()
 
+        # 只扫描中、高、严重级别的漏洞
         command = [
             self.nuclei_bin_path,
             "-list", self.nuclei_target_path,
             "-jsonl",
+            "-severity", "medium,high,critical",
             "-o", self.nuclei_result_path
         ]
 
@@ -123,7 +125,7 @@ class NucleiScan(object):
         # 1. 首先运行RAD扫描
         self.run_rad_scan()
         
-        # 2. 运行Nuclei扫描
+        # 2. 运行Nuclei扫描（只扫描中、高、严重漏洞）
         self.exec_nuclei()
         
         # 3. 解析Nuclei结果
