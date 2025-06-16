@@ -109,7 +109,7 @@ class NucleiScan(object):
 
         command = [
             self.nuclei_bin_path, "-duc",
-            "-severity info,medium,high,critical",
+            "-severity medium,high,critical",
             "-type http",
             "-list", self.nuclei_target_path,
             "-jsonl",
