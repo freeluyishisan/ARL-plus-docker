@@ -111,8 +111,9 @@ class NucleiScan(object):
             self.nuclei_bin_path,
             "-list", self.nuclei_target_path,
             "-jsonl",
-            "-severity low,medium,high,critical",
+            "-severity", "low,medium,high,critical", 
             "-type http",
+            "-duc",
             "-o", self.nuclei_result_path
         ]
 
