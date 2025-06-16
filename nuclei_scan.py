@@ -51,22 +51,12 @@ class NucleiScan(object):
             for line in f:
                 try:
                     data = json.loads(line.strip())
-                    
-                    # 只处理HTTP类型的漏洞
-                    if data.get("type", "") != "http":
-                        continue
-                        
-                    # 只处理中危、高危和严重级别的漏洞
-                    severity = data.get("info", {}).get("severity", "").lower()
-                    if severity not in ["medium", "high", "critical"]:
-                        continue
-                    
                     # 映射nuclei字段到原有结构
                     item = {
                         "template_url": data.get("matched-at", ""),
                         "template_id": data.get("template-id", ""),
                         "vuln_name": data.get("info", {}).get("name", ""),
-                        "vuln_severity": severity.capitalize(),
+                        "vuln_severity": data.get("info", {}).get("severity", ""),
                         "vuln_url": data.get("host", ""),
                         "curl_command": data.get("curl-command", ""),
                         "target": data.get("host", "")
@@ -108,7 +98,7 @@ class NucleiScan(object):
                 logger.info(f"Executing rad command: {' '.join(rad_cmd)}")
                 
                 # 执行rad命令（超时设置为4小时）
-                utils.exec_system(rad_cmd, timeout=4*60*60)
+                utils.exec_system(rad_cmd, timeout=2*60*60)
                 logger.info(f"RAD scan completed for {domain}. Results saved to {rad_result_path}")
                 
             except Exception as e:
@@ -121,11 +111,7 @@ class NucleiScan(object):
             self.nuclei_bin_path,
             "-list", self.nuclei_target_path,
             "-jsonl",
-            "-o", self.nuclei_result_path,
-            # 只扫描HTTP类型的漏洞
-            "-type", "http",
-            # 只扫描中危、高危和严重级别的漏洞
-            "-severity", "medium,high,critical"
+            "-o", self.nuclei_result_path
         ]
 
         logger.info(" ".join(command))
