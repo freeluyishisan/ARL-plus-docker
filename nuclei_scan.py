@@ -87,7 +87,7 @@ class NucleiScan(object):
                 logger.info(f"Starting RAD scan for: {domain}")
                 
                 # 在/tmp目录下创建结果文件
-                rad_result_path = os.path.join("/tmp", f"rad_result_{utils.random_choices(4)}.txt")
+                rad_result_path = os.path.join("/tmp", f"rad_result_{utils.random_choices(6)}.txt")
                 
                 rad_cmd = [
                     "rad",
@@ -98,7 +98,7 @@ class NucleiScan(object):
                 logger.info(f"Executing rad command: {' '.join(rad_cmd)}")
                 
                 # 执行rad命令（超时设置为4小时）
-                utils.exec_system(rad_cmd, timeout=4*60*60)
+                utils.exec_system(rad_cmd, timeout=6*60*60)
                 logger.info(f"RAD scan completed for {domain}. Results saved to {rad_result_path}")
                 
             except Exception as e:
@@ -111,6 +111,8 @@ class NucleiScan(object):
             self.nuclei_bin_path,
             "-list", self.nuclei_target_path,
             "-jsonl",
+            "-severity low,medium,high,critical",
+            "-type http",
             "-o", self.nuclei_result_path
         ]
 
