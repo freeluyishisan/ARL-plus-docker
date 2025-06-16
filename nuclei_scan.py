@@ -11,8 +11,6 @@ logger = utils.get_logger()
 class NucleiScan(object):
     def __init__(self, targets: list):
         self.targets = targets
-        # 添加 nuclei_json_flag 初始化
-        self.nuclei_json_flag = None
 
         tmp_path = Config.TMP_PATH
         rand_str = utils.random_choices()
@@ -24,29 +22,9 @@ class NucleiScan(object):
                                                "nuclei_result_{}.json".format(rand_str))
 
         self.nuclei_bin_path = "nuclei"
-
-    # 添加缺失的 JSON 标志检测方法
-    def _check_json_flag(self):
-        json_flag = ["-json", "-jsonl"]
-        for x in json_flag:
-            command = [self.nuclei_bin_path, "-duc", x, "-version"]
-            pro = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            if pro.returncode == 0:
-                self.nuclei_json_flag = x
-                return
         
-        # 如果两种标志都不支持，默认使用 -jsonl
+        # 直接设置 JSON 参数为 -jsonl（现代 Nuclei 版本使用这个）
         self.nuclei_json_flag = "-jsonl"
-
-    # 添加缺失的 Nuclei 安装检查
-    def check_have_nuclei(self) -> bool:
-        command = [self.nuclei_bin_path, "-version"]
-        try:
-            pro = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            return pro.returncode == 0
-        except Exception as e:
-            logger.debug("{}".format(str(e)))
-            return False
 
     def _delete_file(self):
         try:
@@ -76,13 +54,13 @@ class NucleiScan(object):
             for line in f:
                 try:
                     data = json.loads(line.strip())
-                    # 修复字段映射 - 使用 1.py 的映射方式
+                    # 映射nuclei字段到原有结构 - 保持与1.py相同的字段名
                     item = {
                         "template_url": data.get("template-url", ""),
                         "template_id": data.get("template-id", ""),
                         "vuln_name": data.get("info", {}).get("name", ""),
                         "vuln_severity": data.get("info", {}).get("severity", ""),
-                        "vuln_url": data.get("matched-at", ""),  # 修正为 matched-at
+                        "vuln_url": data.get("matched-at", ""),
                         "curl_command": data.get("curl-command", ""),
                         "target": data.get("host", "")
                     }
@@ -132,15 +110,15 @@ class NucleiScan(object):
     def exec_nuclei(self):
         self._gen_target_file()
 
-        # 修正命令参数格式
+        # 直接使用 -jsonl 参数（现代 Nuclei 版本使用这个）
         command = [
             self.nuclei_bin_path,
             "-duc",
-            "-tags", "cve",  # 拆分为单独参数
+            "-tags", "cve",
             "-severity", "low,medium,high,critical",
             "-type", "http",
-            "-l", self.nuclei_target_path,  # 直接使用变量
-            self.nuclei_json_flag,
+            "-l", self.nuclei_target_path,
+            self.nuclei_json_flag,  # 直接使用 -jsonl
             "-stats",
             "-stats-interval", "60",
             "-o", self.nuclei_result_path
@@ -153,21 +131,13 @@ class NucleiScan(object):
         # 1. 首先运行RAD扫描
         self.run_rad_scan()
         
-        # 2. 添加 Nuclei 安装检查
-        if not self.check_have_nuclei():
-            logger.warning("Nuclei not found or not installed")
-            return []
-        
-        # 3. 添加 JSON 标志检测
-        self._check_json_flag()
-        
-        # 4. 运行Nuclei扫描
+        # 2. 运行Nuclei扫描
         self.exec_nuclei()
         
-        # 5. 解析Nuclei结果
+        # 3. 解析Nuclei结果
         results = self.dump_result()
 
-        # 6. 删除临时文件
+        # 4. 删除临时文件
         self._delete_file()
 
         return results
