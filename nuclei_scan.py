@@ -108,10 +108,7 @@ class NucleiScan(object):
         self._gen_target_file()
 
         command = [
-            self.nuclei_bin_path,"-duc",
-            "-tags cve",
-            "-severity low,medium,high,critical",
-            "-type http",
+            self.nuclei_bin_path,
             "-list", self.nuclei_target_path,
             "-jsonl",
             "-o", self.nuclei_result_path
