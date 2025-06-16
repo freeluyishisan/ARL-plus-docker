@@ -51,12 +51,22 @@ class NucleiScan(object):
             for line in f:
                 try:
                     data = json.loads(line.strip())
+                    
+                    # 只处理HTTP类型的漏洞
+                    if data.get("type", "") != "http":
+                        continue
+                        
+                    # 只处理中危、高危和严重级别的漏洞
+                    severity = data.get("info", {}).get("severity", "").lower()
+                    if severity not in ["medium", "high", "critical"]:
+                        continue
+                    
                     # 映射nuclei字段到原有结构
                     item = {
                         "template_url": data.get("matched-at", ""),
                         "template_id": data.get("template-id", ""),
                         "vuln_name": data.get("info", {}).get("name", ""),
-                        "vuln_severity": data.get("info", {}).get("severity", ""),
+                        "vuln_severity": severity.capitalize(),
                         "vuln_url": data.get("host", ""),
                         "curl_command": data.get("curl-command", ""),
                         "target": data.get("host", "")
@@ -111,7 +121,11 @@ class NucleiScan(object):
             self.nuclei_bin_path,
             "-list", self.nuclei_target_path,
             "-jsonl",
-            "-o", self.nuclei_result_path
+            "-o", self.nuclei_result_path,
+            # 只扫描HTTP类型的漏洞
+            "-type", "http",
+            # 只扫描中危、高危和严重级别的漏洞
+            "-severity", "medium,high,critical"
         ]
 
         logger.info(" ".join(command))
