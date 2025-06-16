@@ -120,17 +120,61 @@ class NucleiScan(object):
 
         utils.exec_system(command, timeout=96*60*60)
 
+    def afrog_cmd(self):
+        """执行afrog扫描命令"""
+        for target in self.targets:
+            target = target.strip()
+            if not target:
+                continue
+                
+            try:
+                # 解析URL获取基域名
+                parsed = urlparse(target)
+                if not parsed.scheme or not parsed.netloc:
+                    logger.warning(f"Invalid target format for afrog: {target}")
+                    continue
+                    
+                domain = f"{parsed.scheme}://{parsed.netloc}"
+                
+                logger.info(f"Starting afrog scan for: {domain}")
+                
+                # 创建输出目录
+                output_dir = "/tmp/test22"
+                if not os.path.exists(output_dir):
+                    os.makedirs(output_dir)
+                
+                # 生成输出文件路径
+                output_file = os.path.join(output_dir, f"afrog_{utils.random_choices(4)}.html")
+                
+                afrog_cmd = [
+                    "./afrog",
+                    "-t", domain,
+                    "-oob", "alphalog",
+                    "-o", output_file
+                ]
+                logger.info(f"Executing afrog command: {' '.join(afrog_cmd)}")
+                
+                # 执行afrog命令
+                utils.exec_system(afrog_cmd, timeout=2*60*60)
+                logger.info(f"afrog scan completed for {domain}. Results saved to {output_file}")
+                
+            except Exception as e:
+                logger.error(f"afrog scan failed for {target}: {str(e)}")
+
     def run(self):
         # 1. 首先运行RAD扫描
         self.run_rad_scan()
         
-        # 2. 运行Nuclei扫描
+        # 2. 运行afrog扫描
+        self.afrog_cmd()
+        
+        # 3. 运行Nuclei扫描
         self.exec_nuclei()
         
-        # 3. 解析Nuclei结果
+        # 4. 解析Nuclei结果
         results = self.dump_result()
 
-        # 4. 删除临时文件
+        # 5. 删除临时文件
         self._delete_file()
 
         return results
