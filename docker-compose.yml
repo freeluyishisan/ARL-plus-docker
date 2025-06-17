@@ -17,6 +17,7 @@ services:
           #- "5003:80"
           - "5003:443"
         volumes:
+          - /tmp/test22/afrog:/tmp/test22
           - ./arl_web.log:/code/arl_web.log
           - ./config-docker.yaml:/code/app/config.yaml
           - ./image:/code/app/tmp_screenshot
