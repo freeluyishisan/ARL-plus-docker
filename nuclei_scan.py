@@ -109,7 +109,7 @@ class NucleiScan(object):
 
         command = [
             self.nuclei_bin_path, "-duc",
-            "-severity medium,high,critical",
+            "-severity low,medium,high,critical",
             "-type http",
             "-list", self.nuclei_target_path,
             "-jsonl",
@@ -149,6 +149,7 @@ class NucleiScan(object):
                 afrog_cmd = [
                     "./afrog",
                     "-t", domain,
+                    "-S", "low,medium,high,critical",
                     "-oob", "alphalog",
                     "-o", output_file
                 ]
