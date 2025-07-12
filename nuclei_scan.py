@@ -2,37 +2,41 @@ import json
 import os.path
 import subprocess
 from urllib.parse import urlparse
+from typing import List, Dict
 
 from app.config import Config
 from app import utils
 
 logger = utils.get_logger()
 
-class NucleiScan(object):
-    def __init__(self, targets: list):
-        self.targets = targets
 
+class NucleiScan(object):
+    # 常量定义
+    RAD_TIMEOUT = 2 * 60 * 60  # 2小时
+    AFROG_TIMEOUT = 2 * 60 * 60  # 2小时
+    NUCLEI_TIMEOUT = 96 * 60 * 60  # 96小时
+
+    def __init__(self, targets: List[str]):
+        self.targets = targets
         tmp_path = Config.TMP_PATH
         rand_str = utils.random_choices()
 
-        self.nuclei_target_path = os.path.join(tmp_path,
-                                               "nuclei_target_{}.txt".format(rand_str))
-
-        self.nuclei_result_path = os.path.join(tmp_path,
-                                               "nuclei_result_{}.json".format(rand_str))
-
+        # 使用f-string格式化字符串
+        self.nuclei_target_path = os.path.join(tmp_path, f"nuclei_target_{rand_str}.txt")
+        self.nuclei_result_path = os.path.join(tmp_path, f"nuclei_result_{rand_str}.json")
         self.nuclei_bin_path = "nuclei"
 
     def _delete_file(self):
+        """删除临时文件"""
         try:
             os.unlink(self.nuclei_target_path)
-            # 删除结果临时文件
             if os.path.exists(self.nuclei_result_path):
                 os.unlink(self.nuclei_result_path)
         except Exception as e:
             logger.warning(e)
 
     def _gen_target_file(self):
+        """生成目标文件"""
         with open(self.nuclei_target_path, "w") as f:
             for domain in self.targets:
                 domain = domain.strip()
@@ -40,9 +44,9 @@ class NucleiScan(object):
                     continue
                 f.write(domain + "\n")
 
-    def dump_result(self) -> list:
+    def dump_result(self) -> List[Dict[str, str]]:
+        """解析nuclei的jsonl结果"""
         results = []
-        # 解析nuclei的jsonl结果
         if not os.path.exists(self.nuclei_result_path):
             logger.warning(f"Nuclei result file not found: {self.nuclei_result_path}")
             return results
@@ -51,7 +55,6 @@ class NucleiScan(object):
             for line in f:
                 try:
                     data = json.loads(line.strip())
-                    # 映射nuclei字段到原有结构
                     item = {
                         "template_url": data.get("matched-at", ""),
                         "template_id": data.get("template-id", ""),
@@ -76,49 +79,44 @@ class NucleiScan(object):
                 continue
                 
             try:
-                # 解析URL获取基域名
                 parsed = urlparse(target)
                 if not parsed.scheme or not parsed.netloc:
                     logger.warning(f"Invalid target format: {target}")
                     continue
                     
                 domain = f"{parsed.scheme}://{parsed.netloc}"
-                
                 logger.info(f"Starting RAD scan for: {domain}")
                 
-                # 在/tmp目录下创建结果文件
                 rad_result_path = os.path.join("/tmp", f"rad_result_{utils.random_choices(4)}.txt")
-                
                 rad_cmd = [
                     "rad",
                     "-t", domain,
-                    "-http-proxy", "172.18.0.1:7777",  # 添加代理参数
+                    "-http-proxy", "172.18.0.1:7777",
                     "-text-output", rad_result_path
                 ]
-                logger.info(f"Executing rad command: {' '.join(rad_cmd)}")
                 
-                # 执行rad命令（超时设置为4小时）
-                utils.exec_system(rad_cmd, timeout=2*60*60)
+                logger.info(f"Executing rad command: {' '.join(rad_cmd)}")
+                utils.exec_system(rad_cmd, timeout=self.RAD_TIMEOUT)
                 logger.info(f"RAD scan completed for {domain}. Results saved to {rad_result_path}")
                 
             except Exception as e:
                 logger.error(f"RAD scan failed for {target}: {str(e)}")
 
     def exec_nuclei(self):
+        """执行Nuclei扫描"""
         self._gen_target_file()
 
         command = [
-        self.nuclei_bin_path, "-duc",
-        "-severity", "low,medium,high,critical",  # 将参数和值分开
-        "-type", "http",
-        "-list", self.nuclei_target_path,
-        "-jsonl",
-        "-o", self.nuclei_result_path
-    ]
+            self.nuclei_bin_path, "-duc",
+            "-severity", "low,medium,high,critical",
+            "-type", "http",
+            "-list", self.nuclei_target_path,
+            "-jsonl",
+            "-o", self.nuclei_result_path
+        ]
 
         logger.info(" ".join(command))
-
-        utils.exec_system(command, timeout=96*60*60)
+        utils.exec_system(command, timeout=self.NUCLEI_TIMEOUT)
 
     def afrog_cmd(self):
         """执行afrog扫描命令"""
@@ -128,22 +126,16 @@ class NucleiScan(object):
                 continue
                 
             try:
-                # 解析URL获取基域名
                 parsed = urlparse(target)
                 if not parsed.scheme or not parsed.netloc:
                     logger.warning(f"Invalid target format for afrog: {target}")
                     continue
                     
                 domain = f"{parsed.scheme}://{parsed.netloc}"
-                
                 logger.info(f"Starting afrog scan for: {domain}")
                 
-                # 创建输出目录
                 output_dir = "/tmp/test22"
-                if not os.path.exists(output_dir):
-                    os.makedirs(output_dir)
-                
-                # 生成输出文件路径
+                os.makedirs(output_dir, exist_ok=True)
                 output_file = os.path.join(output_dir, f"afrog_{utils.random_choices(4)}.html")
                 
                 afrog_cmd = [
@@ -153,16 +145,16 @@ class NucleiScan(object):
                     "-oob", "alphalog",
                     "-o", output_file
                 ]
-                logger.info(f"Executing afrog command: {' '.join(afrog_cmd)}")
                 
-                # 执行afrog命令
-                utils.exec_system(afrog_cmd, timeout=2*60*60)
+                logger.info(f"Executing afrog command: {' '.join(afrog_cmd)}")
+                utils.exec_system(afrog_cmd, timeout=self.AFROG_TIMEOUT)
                 logger.info(f"afrog scan completed for {domain}. Results saved to {output_file}")
                 
             except Exception as e:
                 logger.error(f"afrog scan failed for {target}: {str(e)}")
 
     def run(self):
+        """执行扫描流程"""
         # 1. 首先运行RAD扫描
         self.run_rad_scan()
         
@@ -181,7 +173,8 @@ class NucleiScan(object):
         return results
 
 
-def nuclei_scan(targets: list):
+def nuclei_scan(targets: List[str]) -> List[Dict[str, str]]:
+    """执行nuclei扫描的入口函数"""
     if not targets:
         return []
 
