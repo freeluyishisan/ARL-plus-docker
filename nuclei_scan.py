@@ -108,13 +108,13 @@ class NucleiScan(object):
         self._gen_target_file()
 
         command = [
-            self.nuclei_bin_path, "-duc",
-            "-severity low,medium,high,critical",
-            "-type http",
-            "-list", self.nuclei_target_path,
-            "-jsonl",
-            "-o", self.nuclei_result_path
-        ]
+        self.nuclei_bin_path, "-duc",
+        "-severity", "low,medium,high,critical",  # 将参数和值分开
+        "-type", "http",
+        "-list", self.nuclei_target_path,
+        "-jsonl",
+        "-o", self.nuclei_result_path
+    ]
 
         logger.info(" ".join(command))
 
