@@ -106,14 +106,16 @@ class NucleiScan(object):
         """执行Nuclei扫描"""
         self._gen_target_file()
 
-        command = [
-            self.nuclei_bin_path, "-duc",
-            "-severity", "info,low,medium,high,critical",
-            "-type", "http",
-            "-list", self.nuclei_target_path,
-            "-jsonl",
-            "-o", self.nuclei_result_path
-        ]
+        command = [self.nuclei_bin_path, "-duc",
+                   "-tags cve",
+                   "-severity low,medium,high,critical",
+                   "-type http",
+                   "-l {}".format(self.nuclei_target_path),
+                   self.nuclei_json_flag,  # 在nuclei 2.9.1 中 将 -json 参数改成了 -jsonl 参数
+                   "-stats",
+                   "-stats-interval 60",
+                   "-o {}".format(self.nuclei_result_path),
+                   ]
 
         logger.info(" ".join(command))
         utils.exec_system(command, timeout=self.NUCLEI_TIMEOUT)
