@@ -16,6 +16,7 @@ cp .env.example .env
 COMPOSE_PROFILES=mcp
 ARL_TOKEN=你的_ARL_API_KEY
 ARL_ALLOWED_SUFFIXES=example.com,example.cn
+AUTO_TOOLS_ALLOWED_SUFFIXES=example.com,example.cn
 ```
 
 然后正常启动：
@@ -24,7 +25,7 @@ ARL_ALLOWED_SUFFIXES=example.com,example.cn
 docker compose up -d --build
 ```
 
-MCP 会和 ARL 一起启动。
+MCP 和自动化工具会和 ARL 一起启动。
 
 ## 为什么这样可以
 
@@ -42,7 +43,14 @@ COMPOSE_PROFILES=mcp
 --profile mcp
 ```
 
-仓库里的 `docker-compose.override.yml` 会被 Docker Compose 自动叠加读取，用来给 `arl-mcp` 增加持久化目录和 MCP 数据参数。
+仓库里的 `docker-compose.override.yml` 会被 Docker Compose 自动叠加读取，用来给：
+
+```text
+arl-mcp
+arl-auto-tools
+```
+
+增加持久化目录和运行参数。
 
 ## 数据目录
 
@@ -52,14 +60,18 @@ MCP 资产情报输出会保存到：
 ./mcp-data/
 ├── snapshots/
 ├── exports/
-└── reports/
+├── reports/
+└── auto-tools/
+    └── runs/
 ```
 
 ## 检查
 
 ```bash
 docker ps | grep arl_mcp
+docker ps | grep arl_auto_tools
 docker logs -f arl_mcp
+docker logs -f arl_auto_tools
 ```
 
 MCP SSE 地址：
@@ -68,7 +80,13 @@ MCP SSE 地址：
 http://127.0.0.1:8765/sse
 ```
 
-## 关闭 MCP 自动启动
+自动化工具 API：
+
+```text
+http://127.0.0.1:8770/health
+```
+
+## 关闭 MCP 和自动化工具自动启动
 
 编辑 `.env`，删除或注释：
 
