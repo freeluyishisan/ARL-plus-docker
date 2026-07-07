@@ -61,6 +61,28 @@ services:
         - LANG=en_US.UTF-8
         - TZ=Asia/Shanghai
 
+    arl-mcp:
+      build:
+        context: ./mcp
+      container_name: arl_mcp
+      restart: unless-stopped
+      profiles:
+        - mcp
+      depends_on:
+        - web
+      ports:
+        - "127.0.0.1:8765:8765"
+      environment:
+        - ARL_BASE_URL=${ARL_BASE_URL:-https://web:443}
+        - ARL_TOKEN=${ARL_TOKEN:-}
+        - ARL_ALLOWED_SUFFIXES=${ARL_ALLOWED_SUFFIXES:-}
+        - ARL_VERIFY_TLS=${ARL_VERIFY_TLS:-false}
+        - ARL_TIMEOUT=${ARL_TIMEOUT:-30}
+        - MCP_TRANSPORT=${MCP_TRANSPORT:-sse}
+        - MCP_HOST=0.0.0.0
+        - MCP_PORT=8765
+        - MCP_NAME=arl-plus-mcp
+
     mongodb:
         image: mongo:4.0.27
         container_name: arl_mongodb

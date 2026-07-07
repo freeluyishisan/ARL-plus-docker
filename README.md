@@ -14,7 +14,8 @@ ARL的安装这里就不多赘述了，可以看这里 https://github.com/ki9mu/
 6. 更改文件泄露错误异常的判断，随机化，绕过waf和NIDS检测等
 7. 增加文件泄露扫描发现字典项数
 8. 放出自用POC，总计245个，部分POC可能感觉没用可以删除
-9. 没了...(有需求提issue，视情况开发)
+9. 增加 ARL MCP sidecar，可让支持 MCP 的 AI 客户端读取 ARL 任务/资产、创建受 allowlist 限制的扫描任务、筛选高价值入口
+10. 没了...(有需求提issue，视情况开发)
 
 # 安装方式
 首次安装：
@@ -28,6 +29,114 @@ docker-compose up -d
 ```
 PS:
 由于近期dockerHub问题，现将相关镜像放到网盘，可解压为.tar文件后执行`docker load -i xxx.tar`即可部署，可在公众号回复`ARL-plus`获取地址
+
+# MCP 接入 AI 模型
+
+MCP sidecar 默认不随普通 `docker-compose up -d` 启动，需要显式打开 `mcp` profile。
+
+## 1. 配置 ARL API Key 和授权范围
+
+```
+export ARL_TOKEN="你的_ARL_API_KEY"
+export ARL_ALLOWED_SUFFIXES="example.com,example.cn"
+```
+
+`ARL_ALLOWED_SUFFIXES` 用来限制 AI 创建扫描任务的目标范围。多个域名、网段用英文逗号分隔，例如：
+
+```
+export ARL_ALLOWED_SUFFIXES="example.com,example.cn,10.0.0.0/8"
+```
+
+## 2. 启动 MCP
+
+```
+docker compose --profile mcp up -d --build
+```
+
+或者只启动 MCP：
+
+```
+docker compose --profile mcp up -d --build arl-mcp
+```
+
+默认 SSE 地址：
+
+```
+http://127.0.0.1:8765/sse
+```
+
+## 3. 支持的 MCP 工具
+
+```
+arl_mcp_config
+arl_health
+arl_create_task
+arl_list_tasks
+arl_get_sites
+arl_get_domains
+arl_score_sites
+arl_find_interesting_sites
+```
+
+用途：
+
+```
+arl_create_task              创建受 allowlist 限制的 ARL 任务
+arl_list_tasks               查看 ARL 任务
+arl_get_sites                读取站点资产
+arl_get_domains              读取域名资产
+arl_score_sites              对后台/API/Swagger/测试环境/中间件/非标端口打分
+arl_find_interesting_sites   只返回高价值入口
+```
+
+## 4. MCP 客户端配置示例
+
+支持 SSE 的客户端：
+
+```json
+{
+  "mcpServers": {
+    "arl-plus": {
+      "url": "http://127.0.0.1:8765/sse"
+    }
+  }
+}
+```
+
+如果客户端只支持 stdio，直接本地运行：
+
+```
+cd mcp
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+ARL_BASE_URL=https://127.0.0.1:5003 \
+ARL_TOKEN="你的_ARL_API_KEY" \
+ARL_ALLOWED_SUFFIXES="example.com" \
+MCP_TRANSPORT=stdio \
+python server.py
+```
+
+stdio 客户端配置示例：
+
+```json
+{
+  "mcpServers": {
+    "arl-plus": {
+      "command": "/absolute/path/to/mcp/.venv/bin/python",
+      "args": ["/absolute/path/to/mcp/server.py"],
+      "env": {
+        "ARL_BASE_URL": "https://127.0.0.1:5003",
+        "ARL_TOKEN": "你的_ARL_API_KEY",
+        "ARL_ALLOWED_SUFFIXES": "example.com",
+        "MCP_TRANSPORT": "stdio"
+      }
+    }
+  }
+}
+```
+
+更多说明看 `mcp/README.md`。
 
 # 分布式安装方式
 参考文章： https://mp.weixin.qq.com/s/0q4WLmVWGW6VQpZnRx9EUA
@@ -77,6 +186,6 @@ vim docker-compose.yml
 
 [京东云活动地址]: https://3.cn/-22ITTEy
 [腾讯云活动地址]: https://cloud.tencent.com/act/cps/redirect?redirect=5333&cps_key=488ad3cc44ae37630a493f684f3dc296&from=console
-[华为云活动地址]: https://activity.huaweicloud.com/cps.html?fromacct=2343fcae-6eea-4fc8-9bb9-228ade578237&utm_source=V1g3MDY4NTY=&utm_medium=cps&utm_campaign=201905
+[华为云活动地址]: https://activity.huaweicloud.com/cps.html?fromacct=2343fcae-6eea-4f59-b845-b3d3ede31eda&utm_source=V1g3MDY4NTY=&utm_medium=cps&utm_campaign=201905
 
 [服务器推荐地址在线表格]: https://docs.qq.com/sheet/DZUFIQmxZSGJjY1RK?tab=BB08J2&_t=1728576431874
