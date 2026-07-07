@@ -31,3 +31,22 @@ services:
       - AUTO_TOOLS_NUCLEI_RATE_LIMIT=${AUTO_TOOLS_NUCLEI_RATE_LIMIT:-20}
       - AUTO_TOOLS_NUCLEI_CONCURRENCY=${AUTO_TOOLS_NUCLEI_CONCURRENCY:-10}
       - AUTO_TOOLS_KATANA_DEPTH=${AUTO_TOOLS_KATANA_DEPTH:-2}
+
+  arl-auto-mcp:
+    build:
+      context: ./auto-mcp
+    container_name: arl_auto_mcp
+    restart: unless-stopped
+    profiles:
+      - mcp
+    depends_on:
+      - arl-auto-tools
+    ports:
+      - "127.0.0.1:8766:8766"
+    environment:
+      - AUTO_TOOLS_BASE_URL=${AUTO_TOOLS_BASE_URL:-http://arl-auto-tools:8770}
+      - AUTO_MCP_TRANSPORT=${AUTO_MCP_TRANSPORT:-sse}
+      - AUTO_MCP_HOST=0.0.0.0
+      - AUTO_MCP_PORT=8766
+      - AUTO_MCP_NAME=arl-auto-tools-mcp
+      - AUTO_MCP_TIMEOUT=${AUTO_MCP_TIMEOUT:-3600}
