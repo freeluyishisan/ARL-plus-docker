@@ -1,0 +1,10 @@
+version: '3'
+
+services:
+  arl-mcp:
+    volumes:
+      - ./mcp-data:/data
+    environment:
+      - MCP_DATA_DIR=/data
+      - MCP_MAX_PAGE_SIZE=${MCP_MAX_PAGE_SIZE:-500}
+      - MCP_DEFAULT_MAX_PAGES=${MCP_DEFAULT_MAX_PAGES:-10}
