@@ -72,12 +72,15 @@ services:
         - web
       ports:
         - "127.0.0.1:8765:8765"
+      volumes:
+        - ./mcp-data:/data
       environment:
         - ARL_BASE_URL=${ARL_BASE_URL:-https://web:443}
         - ARL_TOKEN=${ARL_TOKEN:-}
         - ARL_ALLOWED_SUFFIXES=${ARL_ALLOWED_SUFFIXES:-}
         - ARL_VERIFY_TLS=${ARL_VERIFY_TLS:-false}
         - ARL_TIMEOUT=${ARL_TIMEOUT:-30}
+        - ARL_DATA_DIR=${ARL_DATA_DIR:-/data}
         - MCP_TRANSPORT=${MCP_TRANSPORT:-sse}
         - MCP_HOST=0.0.0.0
         - MCP_PORT=8765
