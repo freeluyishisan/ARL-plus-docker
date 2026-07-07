@@ -1,0 +1,12 @@
+# ARL MCP runtime outputs
+mcp-data/
+
+# Local Python envs
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Local env files
+.env
+*.local
