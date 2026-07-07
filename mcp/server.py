@@ -7,6 +7,17 @@ from urllib.parse import urlparse
 import requests
 from mcp.server.fastmcp import FastMCP
 
+from arl_boost import (
+    build_snapshot,
+    diff_snapshots,
+    export_urls,
+    followup_plan,
+    make_markdown_report,
+    normalize_items,
+    score_assets,
+    summarize_scored,
+)
+
 
 ARL_BASE_URL = os.getenv("ARL_BASE_URL", "https://web:443").rstrip("/")
 ARL_TOKEN = os.getenv("ARL_TOKEN", "")
@@ -32,10 +43,9 @@ class ARLError(RuntimeError):
 def _headers() -> dict[str, str]:
     headers = {
         "Content-Type": "application/json",
-        "User-Agent": "arl-plus-mcp/0.1",
+        "User-Agent": "arl-plus-mcp/0.2",
     }
     if ARL_TOKEN:
-        # ARL API examples commonly use a `token` header.
         headers["token"] = ARL_TOKEN
     return headers
 
@@ -69,42 +79,6 @@ def _request(method: str, path: str, **kwargs: Any) -> Any:
         return {"ok": True, "status_code": resp.status_code, "text": resp.text[:2000]}
 
 
-def _normalize_items(payload: Any) -> list[dict[str, Any]]:
-    if isinstance(payload, list):
-        return [item for item in payload if isinstance(item, dict)]
-
-    if not isinstance(payload, dict):
-        return []
-
-    for key in ("items", "data", "result", "results", "rows"):
-        value = payload.get(key)
-        if isinstance(value, list):
-            return [item for item in value if isinstance(item, dict)]
-        if isinstance(value, dict):
-            nested = _normalize_items(value)
-            if nested:
-                return nested
-
-    return []
-
-
-def _extract_url(item: dict[str, Any]) -> str:
-    for key in ("site", "url", "link", "addr", "host", "domain"):
-        value = item.get(key)
-        if value:
-            text = str(value).strip()
-            if not text:
-                continue
-            if text.startswith(("http://", "https://")):
-                return text
-            port = str(item.get("port", "")).strip()
-            scheme = "https" if port in {"443", "8443"} else "http"
-            if port and ":" not in text:
-                return f"{scheme}://{text}:{port}"
-            return f"{scheme}://{text}"
-    return ""
-
-
 def _hostname_from_target(target: str) -> str:
     target = target.strip().lower()
     if target.startswith(("http://", "https://")):
@@ -133,7 +107,6 @@ def _validate_target(target: str) -> None:
     if len(clean) > 253:
         raise ValueError("target is too long")
 
-    # Keep the wrapper scoped to simple ARL targets. Do not accept paths or query strings.
     if any(ch in clean for ch in ["?", "#", "@", " ", "\t", "\r", "\n"]):
         raise ValueError("target must be a plain domain, IP, or CIDR, not a URL with path/query")
 
@@ -161,46 +134,21 @@ def _validate_target(target: str) -> None:
         raise ValueError(f"target is not in allowed scope: {target}")
 
     for allowed in ARL_ALLOWED_SUFFIXES:
-        allowed = allowed.lstrip("*." )
+        allowed = allowed.lstrip("*.")
         if host == allowed or host.endswith("." + allowed):
             return
 
     raise ValueError(f"target is not in allowed scope: {target}")
 
 
-def _interesting_score(item: dict[str, Any]) -> tuple[int, list[str]]:
-    url = _extract_url(item)
-    text = " ".join(str(v) for v in item.values() if v is not None).lower()
-    blob = f"{url} {text}".lower()
+def _fetch_site_items(page: int = 1, size: int = 100, task_id: str = "") -> list[dict[str, Any]]:
+    payload = arl_get_sites(page=page, size=size, task_id=task_id)
+    return normalize_items(payload)
 
-    score = 0
-    reasons: list[str] = []
 
-    rules: list[tuple[int, str, list[str]]] = [
-        (35, "admin/login/console", ["admin", "login", "signin", "sso", "auth", "oauth", "cas", "console", "dashboard", "manage", "manager", "后台", "登录", "管理"]),
-        (30, "api/gateway/swagger", ["api", "gateway", "openapi", "swagger", "graphql", "rest", "接口"]),
-        (25, "test/dev/stage", ["dev", "test", "uat", "stage", "staging", "beta", "pre", "sandbox", "qa"]),
-        (20, "ops middleware", ["jenkins", "gitlab", "nexus", "harbor", "grafana", "kibana", "prometheus", "consul", "etcd", "rabbitmq", "redis", "mongo", "elasticsearch"]),
-        (15, "object storage/cdn", ["oss", "cos", "s3", "bucket", "minio", "cdn"]),
-        (10, "doc/portal", ["docs", "doc", "portal", "wiki", "help"]),
-    ]
-
-    for weight, reason, keywords in rules:
-        if any(keyword in blob for keyword in keywords):
-            score += weight
-            reasons.append(reason)
-
-    port = str(item.get("port", ""))
-    if port and port not in {"80", "443"}:
-        score += 10
-        reasons.append(f"non-standard-port:{port}")
-
-    status = str(item.get("status", item.get("status_code", "")))
-    if status.startswith(("2", "3")):
-        score += 5
-        reasons.append(f"alive:{status}")
-
-    return score, reasons
+def _fetch_scored_sites(task_id: str = "", size: int = 200) -> list[dict[str, Any]]:
+    items = _fetch_site_items(page=1, size=size, task_id=task_id)
+    return score_assets(items)
 
 
 @mcp.tool()
@@ -214,6 +162,7 @@ def arl_mcp_config() -> dict[str, Any]:
         "mcp_name": MCP_NAME,
         "mcp_host": MCP_HOST,
         "mcp_port": MCP_PORT,
+        "version": "0.2",
     }
 
 
@@ -285,34 +234,68 @@ def arl_get_domains(page: int = 1, size: int = 100, task_id: str = "") -> dict[s
 
 @mcp.tool()
 def arl_score_sites(task_id: str = "", size: int = 200) -> dict[str, Any]:
-    """Rank discovered sites by pentest follow-up value using local scoring rules."""
-    payload = arl_get_sites(page=1, size=size, task_id=task_id)
-    items = _normalize_items(payload)
-
-    ranked: list[dict[str, Any]] = []
-    for item in items:
-        score, reasons = _interesting_score(item)
-        url = _extract_url(item)
-        ranked.append({
-            "score": score,
-            "reasons": reasons,
-            "url": url,
-            "title": item.get("title") or item.get("site_title") or "",
-            "status": item.get("status") or item.get("status_code") or "",
-            "fingerprint": item.get("finger") or item.get("fingerprint") or item.get("app") or "",
-            "raw": item,
-        })
-
-    ranked.sort(key=lambda row: row["score"], reverse=True)
+    """Rank discovered sites by local asset-intelligence scoring rules."""
+    ranked = _fetch_scored_sites(task_id=task_id, size=size)
     return {"count": len(ranked), "items": ranked}
 
 
 @mcp.tool()
-def arl_find_interesting_sites(task_id: str = "", min_score: int = 20, size: int = 200) -> dict[str, Any]:
-    """Return high-value sites such as login panels, APIs, Swagger, test/dev assets, and ops middleware."""
-    scored = arl_score_sites(task_id=task_id, size=size)
-    items = [item for item in scored["items"] if int(item["score"]) >= int(min_score)]
+def arl_find_interesting_sites(task_id: str = "", min_score: int = 20, size: int = 200, categories: list[str] | None = None) -> dict[str, Any]:
+    """Return high-value sites such as login panels, APIs, documents, test/dev assets, and ops middleware."""
+    ranked = _fetch_scored_sites(task_id=task_id, size=size)
+    wanted = set(categories or [])
+    items = []
+    for item in ranked:
+        if int(item.get("score", 0)) < int(min_score):
+            continue
+        if wanted and not (wanted & set(item.get("categories", []))):
+            continue
+        items.append(item)
     return {"count": len(items), "items": items}
+
+
+@mcp.tool()
+def arl_asset_brief(task_id: str = "", size: int = 300, top: int = 20) -> dict[str, Any]:
+    """Summarize ARL assets into buckets, categories, fingerprints, status codes, and top assets."""
+    ranked = _fetch_scored_sites(task_id=task_id, size=size)
+    return summarize_scored(ranked, top=top)
+
+
+@mcp.tool()
+def arl_export_urls(task_id: str = "", min_score: int = 20, size: int = 300, limit: int = 300, categories: list[str] | None = None) -> dict[str, Any]:
+    """Export ranked URLs for downstream manual validation or browser-based review."""
+    ranked = _fetch_scored_sites(task_id=task_id, size=size)
+    urls = export_urls(ranked, min_score=min_score, categories=categories, limit=limit)
+    return {"count": len(urls), "urls": urls, "text": "\n".join(urls)}
+
+
+@mcp.tool()
+def arl_markdown_report(task_id: str = "", size: int = 300, limit: int = 50, title: str = "ARL AI Asset Report") -> dict[str, Any]:
+    """Generate a Markdown report for high-value ARL assets."""
+    ranked = _fetch_scored_sites(task_id=task_id, size=size)
+    report = make_markdown_report(ranked, title=title, limit=limit)
+    return {"markdown": report, "count": len(ranked)}
+
+
+@mcp.tool()
+def arl_asset_snapshot(task_id: str = "", size: int = 500) -> dict[str, Any]:
+    """Return a compact asset snapshot for later diffing."""
+    ranked = _fetch_scored_sites(task_id=task_id, size=size)
+    return build_snapshot(ranked)
+
+
+@mcp.tool()
+def arl_diff_snapshots(old_snapshot: dict[str, Any], new_snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Diff two snapshots returned by arl_asset_snapshot."""
+    return diff_snapshots(old_snapshot, new_snapshot)
+
+
+@mcp.tool()
+def arl_followup_plan(task_id: str = "", size: int = 300, limit: int = 30) -> dict[str, Any]:
+    """Generate grouped follow-up tasks for AI/Hermes-style asset review."""
+    ranked = _fetch_scored_sites(task_id=task_id, size=size)
+    tasks = followup_plan(ranked, limit=limit)
+    return {"count": len(tasks), "tasks": tasks}
 
 
 if __name__ == "__main__":
