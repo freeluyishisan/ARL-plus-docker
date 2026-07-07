@@ -55,7 +55,7 @@ http://127.0.0.1:8765/sse
 默认 MCP 可以直接用。如果要保存快照、导出 URL、保存报告，推荐叠加 override：
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.mcp-intel.yml --profile mcp up -d --build
+docker compose -f docker-compose.yml -f docker-compose.mcp-data.yml --profile mcp up -d --build
 ```
 
 输出目录：
@@ -78,7 +78,7 @@ docker compose --profile mcp up -d --build arl-mcp
 如果要持久化：
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.mcp-intel.yml --profile mcp up -d --build arl-mcp
+docker compose -f docker-compose.yml -f docker-compose.mcp-data.yml --profile mcp up -d --build arl-mcp
 ```
 
 ## 客户端配置示例
@@ -263,5 +263,5 @@ export ARL_ALLOWED_SUFFIXES="example.com,10.0.0.0/8"
 确认是否叠加了持久化 override：
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.mcp-intel.yml --profile mcp up -d --build
+docker compose -f docker-compose.yml -f docker-compose.mcp-data.yml --profile mcp up -d --build
 ```
