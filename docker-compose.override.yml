@@ -8,3 +8,26 @@ services:
       - MCP_DATA_DIR=${MCP_DATA_DIR:-/data}
       - MCP_MAX_PAGE_SIZE=${MCP_MAX_PAGE_SIZE:-500}
       - MCP_DEFAULT_MAX_PAGES=${MCP_DEFAULT_MAX_PAGES:-10}
+      - AUTO_TOOLS_BASE_URL=${AUTO_TOOLS_BASE_URL:-http://arl-auto-tools:8770}
+
+  arl-auto-tools:
+    build:
+      context: ./auto-tools
+    container_name: arl_auto_tools
+    restart: unless-stopped
+    profiles:
+      - mcp
+    ports:
+      - "127.0.0.1:8770:8770"
+    volumes:
+      - ./mcp-data:/data
+    environment:
+      - ARL_ALLOWED_SUFFIXES=${ARL_ALLOWED_SUFFIXES:-}
+      - AUTO_TOOLS_ALLOWED_SUFFIXES=${AUTO_TOOLS_ALLOWED_SUFFIXES:-${ARL_ALLOWED_SUFFIXES:-}}
+      - AUTO_TOOLS_DATA_DIR=${AUTO_TOOLS_DATA_DIR:-/data/auto-tools}
+      - AUTO_TOOLS_MAX_URLS=${AUTO_TOOLS_MAX_URLS:-1000}
+      - AUTO_TOOLS_TIMEOUT=${AUTO_TOOLS_TIMEOUT:-1800}
+      - AUTO_TOOLS_HTTPX_RATE_LIMIT=${AUTO_TOOLS_HTTPX_RATE_LIMIT:-50}
+      - AUTO_TOOLS_NUCLEI_RATE_LIMIT=${AUTO_TOOLS_NUCLEI_RATE_LIMIT:-20}
+      - AUTO_TOOLS_NUCLEI_CONCURRENCY=${AUTO_TOOLS_NUCLEI_CONCURRENCY:-10}
+      - AUTO_TOOLS_KATANA_DEPTH=${AUTO_TOOLS_KATANA_DEPTH:-2}
