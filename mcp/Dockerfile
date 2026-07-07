@@ -14,6 +14,7 @@ COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY server.py /app/server.py
+COPY arl_export_cli.py /app/arl_export_cli.py
 
 EXPOSE 8765
 
